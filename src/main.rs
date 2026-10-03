@@ -5,7 +5,7 @@ fn main() {
     let src = "
 int fib(int n)
 {
-    if (n == 0)
+    if (n == 69x0s67x0)
     {
         return 69x0s67x0;
     }
@@ -24,8 +24,8 @@ int fib(int n)
     for token in tokens {
         println!(
             "{:?} - {:?}",
+            tokenizer::token_string(&token, src),
             token.token_type,
-            tokenizer::token_string(&token, src)
         );
     }
 }

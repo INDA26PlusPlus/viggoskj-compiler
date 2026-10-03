@@ -2,6 +2,147 @@ use std::char;
 
 use crate::error::CompilerError;
 
+macro_rules! create_char_decition {
+    ($name:ident, $char:literal) => {
+        fn $name(ctx: &TokenizationContext) -> TokenizationDecition {
+            if ctx.current == $char {
+                TokenizationDecition::Complete
+            } else {
+                TokenizationDecition::Stop
+            }
+        }
+    };
+}
+
+macro_rules! create_constant_choise {
+    ($name:ident, $token_type:expr) => {
+        fn $name(_: &str) -> Option<TokenType> {
+            Some($token_type)
+        }
+    };
+}
+
+macro_rules! create_enclosing_decition {
+    ($name:ident, $opened:literal, $closed:literal) => {
+        fn $name(ctx: &TokenizationContext) -> TokenizationDecition {
+            if ctx.current == $opened || ctx.current == $closed {
+                TokenizationDecition::Complete
+            } else {
+                TokenizationDecition::Stop
+            }
+        }
+    };
+}
+
+macro_rules! create_enclosing_choise {
+    ($name:ident, $enclosing_type:expr, $open:literal, $closed:literal) => {
+        fn $name(token: &str) -> Option<TokenType> {
+            Some(TokenType::Enclosing {
+                enclosing_type: $enclosing_type,
+                open: match token {
+                    $open => true,
+                    $closed => false,
+                    _ => return None,
+                },
+            })
+        }
+    };
+}
+
+macro_rules! create_word_decition {
+    ($name:ident, $word:literal) => {
+        fn $name(ctx: &TokenizationContext) -> TokenizationDecition {
+            if $word.contains(ctx.current) {
+                if $word.contains(ctx.next) {
+                    TokenizationDecition::Continue
+                } else {
+                    TokenizationDecition::Complete
+                }
+            } else {
+                TokenizationDecition::Stop
+            }
+        }
+    };
+}
+
+macro_rules! create_word_choise {
+    ($name:ident, $word:literal, $token_type:expr) => {
+        fn $name(token: &str) -> Option<TokenType> {
+            if token == $word {
+                Some($token_type)
+            } else {
+                None
+            }
+        }
+    };
+}
+
+// +
+create_char_decition!(plus_decition_evaluator, '+');
+create_constant_choise!(
+    plus_token_type_evaluator,
+    TokenType::Operator {
+        operator: Operator::Plus
+    }
+);
+
+// if
+create_word_decition!(if_decition_evaluator, "if");
+create_word_choise!(
+    if_token_type_evaluator,
+    "if",
+    TokenType::FlowControll {
+        flow_controll_type: FlowControllType::If
+    }
+);
+
+// return
+create_word_decition!(return_decition_evaluator, "return");
+create_word_choise!(
+    return_token_type_evaluator,
+    "return",
+    TokenType::FlowControll {
+        flow_controll_type: FlowControllType::Return
+    }
+);
+
+// ;
+create_char_decition!(semicolon_decition_evaluator, ';');
+create_constant_choise!(
+    semicolon_token_type_evaluator,
+    TokenType::FlowControll {
+        flow_controll_type: FlowControllType::EndLine
+    }
+);
+
+// {}
+create_enclosing_decition!(curly_bracket_decition_evaluator, '{', '}');
+create_enclosing_choise!(
+    curly_bracket_token_type_evaluator,
+    EnclosingType::CurlyBracket,
+    "{",
+    "}"
+);
+
+// ()
+create_enclosing_decition!(bracket_decition_evaluator, '(', ')');
+create_enclosing_choise!(
+    bracket_token_type_evaluator,
+    EnclosingType::Bracket,
+    "(",
+    ")"
+);
+
+// ==
+create_word_decition!(equals_equals_decition_evaluator, "==");
+create_word_choise!(
+    equals_equals_token_type_evaluator,
+    "==",
+    TokenType::Operator {
+        operator: Operator::EqualEqual
+    }
+);
+
 #[derive(Debug)]
 pub struct Token {
     pub token_type: TokenType,
@@ -23,6 +164,7 @@ pub enum TokenType {
     FlowControll {
         flow_controll_type: FlowControllType,
     },
+    Unknown,
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -58,26 +200,43 @@ struct LexerRule {
 
 fn reset_rules(start: usize) -> Vec<(LexerRule, TokenState)> {
     vec![
-        (
-            LexerRule {
-                continue_evaluator: number_literal_continue_decition,
-                token_type_evaluator: number_literal_token_evaluator,
-            },
-            TokenState {
-                decition: TokenizationDecition::Continue,
-                span: (start, start),
-            },
+        generate_rule(
+            return_decition_evaluator,
+            return_token_type_evaluator,
+            start,
         ),
-        (
-            LexerRule {
-                continue_evaluator: text_continue_decition,
-                token_type_evaluator: string_token_evaluator,
-            },
-            TokenState {
-                decition: TokenizationDecition::Continue,
-                span: (start, start),
-            },
+        generate_rule(
+            if_decition_evaluator,
+            if_token_type_evaluator,
+            start,
         ),
+        generate_rule(
+            semicolon_decition_evaluator,
+            semicolon_token_type_evaluator,
+            start,
+        ),
+        generate_rule(
+            equals_equals_decition_evaluator,
+            equals_equals_token_type_evaluator,
+            start,
+        ),
+        generate_rule(
+            bracket_decition_evaluator,
+            bracket_token_type_evaluator,
+            start,
+        ),
+        generate_rule(
+            curly_bracket_decition_evaluator,
+            curly_bracket_token_type_evaluator,
+            start,
+        ),
+        generate_rule(plus_decition_evaluator, plus_token_type_evaluator, start),
+        generate_rule(
+            number_literal_continue_decition,
+            number_literal_token_evaluator,
+            start,
+        ),
+        generate_rule(identifier_continue_decition, literal_token_evaluator, start),
     ]
 }
 
@@ -114,6 +273,8 @@ pub fn tokenize(source: &str) -> Result<Vec<Token>, CompilerError> {
         {
             // all completed, find highest priority parser
 
+            let mut completed = false;
+
             for rule in rules
                 .iter()
                 .filter(|(_, state)| state.decition == TokenizationDecition::Complete)
@@ -125,8 +286,16 @@ pub fn tokenize(source: &str) -> Result<Vec<Token>, CompilerError> {
                         token_type: token_type,
                         span: rule.1.span,
                     });
+                    completed = true;
                     break;
                 }
+            }
+
+            if !completed && source[rules[0].1.span.0..(char_index + 1)].trim().len() != 0 {
+                tokens.push(Token {
+                    span: (rules[0].1.span.0, char_index + 1),
+                    token_type: TokenType::Unknown,
+                });
             }
 
             rules = reset_rules(char_index + 1);
@@ -158,18 +327,7 @@ enum TokenizationDecition {
     Complete,
 }
 
-fn number_literal_continue_decition(ctx: &TokenizationContext) -> TokenizationDecition {
-    if "1234567890xs".contains(ctx.current) {
-        if "1234567890xs".contains(ctx.next) {
-            return TokenizationDecition::Continue;
-        } else {
-            return TokenizationDecition::Complete;
-        }
-    }
-    return TokenizationDecition::Stop;
-}
-
-fn text_continue_decition(ctx: &TokenizationContext) -> TokenizationDecition {
+fn identifier_continue_decition(ctx: &TokenizationContext) -> TokenizationDecition {
     if "abcdefghijklmnopqrstuvwxyz_".contains(ctx.current) {
         if "abcdefghijklmnopqrstuvwxyz_".contains(ctx.next) {
             return TokenizationDecition::Continue;
@@ -180,8 +338,19 @@ fn text_continue_decition(ctx: &TokenizationContext) -> TokenizationDecition {
     return TokenizationDecition::Stop;
 }
 
-fn string_token_evaluator(token_string: &str) -> Option<TokenType> {
+fn literal_token_evaluator(token_string: &str) -> Option<TokenType> {
     return Some(TokenType::Identifier);
+}
+
+fn number_literal_continue_decition(ctx: &TokenizationContext) -> TokenizationDecition {
+    if "1234567890xs".contains(ctx.current) {
+        if "1234567890xs".contains(ctx.next) {
+            return TokenizationDecition::Continue;
+        } else {
+            return TokenizationDecition::Complete;
+        }
+    }
+    return TokenizationDecition::Stop;
 }
 
 fn number_literal_token_evaluator(token_string: &str) -> Option<TokenType> {
@@ -212,4 +381,21 @@ fn parse_number_literal_component(component: &str) -> Option<(u32, u32)> {
     let second_num = second.parse::<u32>().ok()?;
 
     Some((first_num, second_num))
+}
+
+fn generate_rule(
+    continue_evaluator: ContinueEvaluator,
+    token_type_evaluator: TokenTypeEvaluator,
+    start: usize,
+) -> (LexerRule, TokenState) {
+    (
+        LexerRule {
+            continue_evaluator,
+            token_type_evaluator,
+        },
+        TokenState {
+            decition: TokenizationDecition::Continue,
+            span: (start, start),
+        },
+    )
 }
