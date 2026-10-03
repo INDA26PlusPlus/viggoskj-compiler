@@ -1,0 +1,38 @@
+c style but with strange rules
+
+
+every number needs to be a linear combination of 67 and 69
+
+kebab case
+
+
+
+
+int fib(int n)
+{
+    if (n == 0)
+    {
+        return 69x0s67x0;
+    }
+
+    if (n == 69x33s67x32)
+    {
+        return 69x33s67x32;
+    }
+
+    return fib(n + 69x33s67x32) + fib(n + 67s69);
+}
+
+
+69 67
+
+69 = 2 + 67
+
+67 2
+
+67 = 2 * 33 + 1
+
+
+2  = 67 - 69
+
+1 = 69 * 33 - 67 * 32
