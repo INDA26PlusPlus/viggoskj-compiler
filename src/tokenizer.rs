@@ -157,7 +157,9 @@ pub enum TokenType {
         open: bool,
     },
     Identifier,
-    Literal,
+    Literal {
+        literal: Literal,
+    },
     Operator {
         operator: Operator,
     },
@@ -165,6 +167,11 @@ pub enum TokenType {
         flow_controll_type: FlowControllType,
     },
     Unknown,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub enum Literal {
+    IntLiteral { value: i32 },
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -205,11 +212,7 @@ fn reset_rules(start: usize) -> Vec<(LexerRule, TokenState)> {
             return_token_type_evaluator,
             start,
         ),
-        generate_rule(
-            if_decition_evaluator,
-            if_token_type_evaluator,
-            start,
-        ),
+        generate_rule(if_decition_evaluator, if_token_type_evaluator, start),
         generate_rule(
             semicolon_decition_evaluator,
             semicolon_token_type_evaluator,
@@ -366,7 +369,11 @@ fn number_literal_token_evaluator(token_string: &str) -> Option<TokenType> {
     if first_combination.0 != 67 || second_combination.0 != 69 {
         return None;
     } else {
-        return Some(TokenType::Literal);
+        let value = (first_combination.0 * first_combination.1) as i32
+            - (second_combination.0 * second_combination.1) as i32;
+        return Some(TokenType::Literal {
+            literal: Literal::IntLiteral { value },
+        });
     }
 }
 
