@@ -156,7 +156,9 @@ pub enum TokenType {
         enclosing_type: EnclosingType,
         open: bool,
     },
-    Identifier,
+    Identifier {
+        identifier: String,
+    },
     Literal {
         literal: Literal,
     },
@@ -342,7 +344,9 @@ fn identifier_continue_decition(ctx: &TokenizationContext) -> TokenizationDeciti
 }
 
 fn literal_token_evaluator(token_string: &str) -> Option<TokenType> {
-    return Some(TokenType::Identifier);
+    return Some(TokenType::Identifier {
+        identifier: token_string.to_string(),
+    });
 }
 
 fn number_literal_continue_decition(ctx: &TokenizationContext) -> TokenizationDecition {

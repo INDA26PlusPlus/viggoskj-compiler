@@ -3,7 +3,11 @@ mod error;
 mod tokenizer;
 
 fn main() {
-    let src = "69x33s67x32 + n ";
+    let src = "
+    void int fib(n) {
+        69x33s67x32 + n + 69x33s67x32;
+    }
+    ";
 
     let tokens = tokenizer::tokenize(src).unwrap();
     for token in &tokens {

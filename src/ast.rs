@@ -1,3 +1,5 @@
+use std::collections::binary_heap::Iter;
+
 use crate::error::*;
 use crate::tokenizer;
 
@@ -7,7 +9,14 @@ pub enum ExpressionNode {
     LiteralNode { node: LiteralNode },
     OperatorNode { node: OperatorNode },
     VariableNode { node: VariableNode },
-    Empty,
+}
+
+#[derive(Debug, Clone)]
+pub enum ExpressionNodeStep {
+    IfCondition,
+    ReturnExpression,
+    OperatorLeft,
+    OperatorRight,
 }
 
 #[derive(Debug, Clone)]
@@ -46,78 +55,75 @@ pub enum Operator {
     Divide,
 }
 
-pub fn create_expression(tokens: &Vec<tokenizer::Token>) -> Result<ExpressionNode, CompilerError> {
-    let mut stack: Vec<ExpressionNode> = Vec::new();
-    let mut working_node: Option<ExpressionNode> = None;
-
-    for token in tokens.iter() {
-        working_node = match &mut working_node {
-            None => {
-                // no working node, set first thingamabove
-                Some(match &token.token_type {
-                    tokenizer::TokenType::Literal { literal } => ExpressionNode {
-                        parent: None,
-                        node: ExpressionNode::LiteralNode {
-                            node: token_literal_to_node(&literal),
-                        },
-                    },
-                    _ => return Err(CompilerError::BuildingError),
-                })
-            }
-            Some(node) => Some(step(node, token)?),
-        }
+fn node_at<'a>(
+    root: &'a mut ExpressionNode,
+    steps: &mut std::slice::Iter<'_, ExpressionNodeStep>,
+) -> &'a mut ExpressionNode {
+    match steps.next() {
+        None => root,
+        Some(step) => match step {
+            ExpressionNodeStep::OperatorLeft => match root {
+                ExpressionNode::OperatorNode { node } => {
+                    node_at(node.left.as_deref_mut().unwrap(), steps)
+                }
+                _ => panic!("AAAAAAAAAA"),
+            },
+            ExpressionNodeStep::OperatorRight => match root {
+                ExpressionNode::OperatorNode { node } => {
+                    node_at(node.right.as_deref_mut().unwrap(), steps)
+                }
+                _ => panic!("AAAAAAAAAA"),
+            },
+            _ => panic!("AAAAAAAAAA"),
+        },
     }
-
-    working_node.ok_or(CompilerError::BuildingError)
 }
 
-fn step(
-    working_node: &mut ExpressionNode,
-    token: &tokenizer::Token,
-) -> Result<Box<ExpressionNode>, CompilerError> {
-    match working_node.node {
-        ExpressionNode::VariableNode { node: _ } | ExpressionNode::LiteralNode { node: _ } => {
-            match &token.token_type {
-                // while wokring is literal, make the literal child of new operator
-                tokenizer::TokenType::Operator { operator } => Ok(Box::from(ExpressionNode {
-                    parent: working_node.parent,
-                    node: ExpressionNode::OperatorNode {
-                        node: token_operator_to_node(
-                            operator,
-                            Some(Box::from((*working_node).clone())),
-                            None,
-                        ),
-                    },
-                })),
-                _ => return Err(CompilerError::BuildingError),
+pub fn create_expression_untill(tokens: &Vec<tokenizer::Token>) -> Result<ExpressionNode, CompilerError> {
+    let mut iter = tokens.iter();
+
+    let mut stack: Vec<ExpressionNodeStep> = Vec::new();
+
+    let mut root = match &(&mut iter).next().unwrap().token_type {
+        tokenizer::TokenType::Literal { literal } => ExpressionNode::LiteralNode {
+            node: token_literal_to_node(&literal),
+        },
+        _ => return Err(CompilerError::BuildingError),
+    };
+
+    for token in iter {
+        let node = node_at(&mut root, &mut stack.iter());
+        match node {
+            ExpressionNode::VariableNode { node: _ } | ExpressionNode::LiteralNode { node: _ } => {
+                match &token.token_type {
+                    tokenizer::TokenType::Operator { operator } => {
+                        *node = ExpressionNode::OperatorNode {
+                            node: token_operator_to_node(
+                                operator,
+                                Some(Box::new((*node).clone())),
+                                None,
+                            ),
+                        };
+                    }
+                    _ => panic!("ASDASDAS"),
+                }
             }
-        }
-        ExpressionNode::OperatorNode { node: node } => {
-            if node.right.is_none() {
-                let mut n = Box::from(ExpressionNode {
-                    parent: working_node.parent.clone(),
-                    node: ExpressionNode::Empty,
-                });
 
-                n.node = ExpressionNode::OperatorNode {
-                    node: OperatorNode {
-                        operator: node.operator,
-                        left: node.left,
-                        right: Some(Box::from(token_to_expression_node(
-                            &token.token_type,
-                            Some(n),
-                        ))),
-                    },
-                };
-
-                Ok(n)
-            } else {
-                panic!("AAAAAAa");
+            ExpressionNode::OperatorNode { node } => {
+                if node.right.is_none() {
+                    println!("adasd");
+                    node.right = Some(Box::from(token_to_expression_node_type(&token.token_type)));
+                    stack.push(ExpressionNodeStep::OperatorRight);
+                } else {
+                    panic!("ASDASDASDA");
+                }
             }
-        }
 
-        _ => panic!("UNKNOWN NODE!!!"),
+            _ => panic!("UNKNOWN NODE!!!"),
+        };
     }
+
+    Ok(root)
 }
 
 fn token_literal_to_node(literal: &tokenizer::Literal) -> LiteralNode {
@@ -126,21 +132,16 @@ fn token_literal_to_node(literal: &tokenizer::Literal) -> LiteralNode {
     }
 }
 
-fn token_to_expression_node(
-    token: &tokenizer::TokenType,
-    parent: Option<Box<ExpressionNode>>,
-) -> ExpressionNode {
-    ExpressionNode {
-        parent: parent,
-        node: token_to_expression_node_type(token),
-    }
-}
-
 fn token_to_expression_node_type(token: &tokenizer::TokenType) -> ExpressionNode {
     match token {
         tokenizer::TokenType::Literal { literal } => match literal {
             tokenizer::Literal::IntLiteral { value } => ExpressionNode::LiteralNode {
                 node: LiteralNode::IntLiteral { number: *value },
+            },
+        },
+        tokenizer::TokenType::Identifier { identifier } => ExpressionNode::VariableNode {
+            node: VariableNode {
+                name: (*identifier).clone(),
             },
         },
         _ => panic!("NO TIMPLEMENTRADAS!!!"),
