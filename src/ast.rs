@@ -1,14 +1,8 @@
-use core::num;
-use std::any::Any;
-use std::iter::Peekable;
-use std::panic::PanicHookInfo;
-
-use crate::ast::ExpressionNodeStep::ReturnExpression;
 use crate::error::*;
 use crate::tokenizer;
 use crate::tokenizer::EnclosingType;
 use crate::tokenizer::FlowControllType;
-use crate::tokenizer::SyntaxFlowType;
+use std::iter::Peekable;
 
 #[derive(Debug, Clone)]
 pub enum ExpressionNode {
@@ -31,7 +25,7 @@ pub enum ExpressionNodeStep {
 pub enum StatementNode {
     If {
         condition: Box<ExpressionNode>,
-        body: Vec<ExpressionNode>,
+        body: Option<Vec<ExpressionNode>>,
     },
     Return {
         expression: Option<Box<ExpressionNode>>,
@@ -108,6 +102,18 @@ fn create_function_declaration(
         .ok_or(CompilerError::InvalidFunctionDeclaration {
             reason: "invalid name".to_string(),
         })?;
+
+    let identifier = match &function_name_token.token_type {
+        tokenizer::TokenType::Identifier { identifier } => identifier.clone(),
+        _ => {
+            return Err(CompilerError::InvalidFunctionDeclaration {
+                reason: "invalid name token".to_string(),
+            });
+        }
+    };
+
+    println!("--------------------------------------- {}", identifier);
+
     let _ = tokens
         .next()
         .ok_or(CompilerError::InvalidFunctionDeclaration {
@@ -128,15 +134,12 @@ fn create_function_declaration(
 
     let mut expressions = create_block(tokens)?;
 
+    tokens.next();
+
+    println!("asdasdasd {:?}", return_type_token);
+
     Ok(FunctionDeclarationNode {
-        identifier: match &function_name_token.token_type {
-            tokenizer::TokenType::Identifier { identifier } => identifier.clone(),
-            _ => {
-                return Err(CompilerError::InvalidFunctionDeclaration {
-                    reason: "invalid name token: ".to_string(),
-                });
-            }
-        },
+        identifier,
         body: expressions,
     })
 }
@@ -145,7 +148,7 @@ fn create_function_call(
     identifier: String,
     tokens: &mut Peekable<std::slice::Iter<tokenizer::Token>>,
 ) -> Result<ExpressionNode, CompilerError> {
-    let _ = tokens
+    let a = tokens
         .next()
         .ok_or(CompilerError::InvalidFunctionDeclaration {
             reason: "".to_string(),
@@ -164,7 +167,7 @@ fn create_function_call(
                 open: false,
             })
     {
-        println!("{:?}", next.token_type);
+        println!("--- {:?}", next.token_type);
         arguments.push(create_expression_until_stop(tokens)?);
     }
 
@@ -182,8 +185,10 @@ fn create_expression_until_stop(
     tokens: &mut Peekable<std::slice::Iter<tokenizer::Token>>,
 ) -> Result<ExpressionNode, CompilerError> {
     let mut stack: Vec<ExpressionNodeStep> = Vec::new();
-
+    println!("Creating expression: {:?}", tokens.peek());
     let mut root = tokens_to_expression_node_type(tokens)?;
+    println!("next: {:?}", tokens.peek());
+
     while let Some(token) = tokens.peek() {
         match token.token_type {
             tokenizer::TokenType::Enclosing {
@@ -196,7 +201,7 @@ fn create_expression_until_stop(
             | tokenizer::TokenType::SyntaxFlow {
                 syntax_flow_type: tokenizer::SyntaxFlowType::Comma,
             } => {
-                println!("Expression created");
+                println!("Expression created: {:?}", token);
                 return Ok(root);
             }
             _ => {}
@@ -242,17 +247,20 @@ fn create_expression_until_stop(
 
             ExpressionNode::StatementNode {
                 node: StatementNode::If { condition, body },
-            } => { 
-                println!("Expression created if");
+            } => {
+                *body = Some(create_block(tokens)?);
+
+                println!("{:?}", tokens.peek());
                 return Ok(root);
             }
 
             _ => panic!("UNKNOWN NODE!!! {:?}", node),
         };
     }
-    println!("Expression created");
 
-    Ok(root)
+    Err(CompilerError::ExpressionError {
+        reasong: "Invalid expression ending".to_string(),
+    })
 }
 
 fn node_at<'a>(
@@ -289,9 +297,10 @@ fn create_block(
     tokens: &mut Peekable<std::slice::Iter<tokenizer::Token>>,
 ) -> Result<Vec<ExpressionNode>, CompilerError> {
     let mut expressions: Vec<ExpressionNode> = Vec::new();
-
+    println!("----------");
+    tokens.next();
     while let next = tokens
-        .next()
+        .peek()
         .ok_or(CompilerError::InvalidFunctionDeclaration {
             reason: "Function not closed".to_string(),
         })?
@@ -301,6 +310,7 @@ fn create_block(
                 open: false,
             })
     {
+        println!("block line {:?}", next);
         expressions.push(create_expression_until_stop(tokens)?);
         tokens.next();
     }
@@ -318,7 +328,7 @@ fn tokens_to_expression_node_type(
     tokens: &mut Peekable<std::slice::Iter<tokenizer::Token>>,
 ) -> Result<ExpressionNode, CompilerError> {
     let token = tokens.next().unwrap();
-    println!("asd {:?}", token);
+    println!("to expression node {:?}", token);
 
     Ok(match &token.token_type {
         tokenizer::TokenType::Literal { literal } => match literal {
@@ -354,11 +364,10 @@ fn tokens_to_expression_node_type(
             tokens.next();
             let cond = create_expression_until_stop(tokens)?;
             tokens.next();
-            let block = create_block(tokens)?;
             ExpressionNode::StatementNode {
                 node: StatementNode::If {
                     condition: Box::from(cond),
-                    body: block,
+                    body: None,
                 },
             }
         }
@@ -446,8 +455,10 @@ pub fn visualize_expression_node(node: &ExpressionNode, indentation: usize) {
                 print_indentaiton(indentation);
                 println!("If");
                 visualize_expression_node(condition, indentation + 1);
-                for arg in body {
-                    visualize_expression_node(arg, indentation + 1);
+                if let Some(b) = body {
+                    for arg in b {
+                        visualize_expression_node(arg, indentation + 1);
+                    }
                 }
             }
             _ => panic!("ASDASD"),
@@ -460,6 +471,6 @@ pub fn visualize_expression_node(node: &ExpressionNode, indentation: usize) {
 }
 
 fn print_indentaiton(indentation: usize) {
-    let v = " ".repeat(indentation * 2);
+    let v = "| ".repeat(indentation);
     print!("{}", v);
 }
