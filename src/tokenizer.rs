@@ -110,8 +110,17 @@ create_word_choise!(
 create_char_decition!(semicolon_decition_evaluator, ';');
 create_constant_choise!(
     semicolon_token_type_evaluator,
-    TokenType::FlowControll {
-        flow_controll_type: FlowControllType::EndLine
+    TokenType::SyntaxFlow {
+        syntax_flow_type: SyntaxFlowType::EndLine
+    }
+);
+
+// ;
+create_char_decition!(comma_decition_evaluator, ',');
+create_constant_choise!(
+    comma_token_type_evaluator,
+    TokenType::SyntaxFlow {
+        syntax_flow_type: SyntaxFlowType::Comma
     }
 );
 
@@ -168,6 +177,9 @@ pub enum TokenType {
     FlowControll {
         flow_controll_type: FlowControllType,
     },
+    SyntaxFlow {
+        syntax_flow_type: SyntaxFlowType,
+    },
     Unknown,
 }
 
@@ -193,10 +205,16 @@ pub enum EnclosingType {
 }
 
 #[derive(Debug, PartialEq, Clone)]
+pub enum SyntaxFlowType {
+    Comma,
+    Dot,
+    EndLine,
+}
+
+#[derive(Debug, PartialEq, Clone)]
 pub enum FlowControllType {
     If,
     Return,
-    EndLine,
 }
 
 type ContinueEvaluator = fn(&TokenizationContext) -> TokenizationDecition;
@@ -215,6 +233,7 @@ fn reset_rules(start: usize) -> Vec<(LexerRule, TokenState)> {
             start,
         ),
         generate_rule(if_decition_evaluator, if_token_type_evaluator, start),
+        generate_rule(comma_decition_evaluator, comma_token_type_evaluator, start),
         generate_rule(
             semicolon_decition_evaluator,
             semicolon_token_type_evaluator,
@@ -366,11 +385,9 @@ fn number_literal_token_evaluator(token_string: &str) -> Option<TokenType> {
     let mut first_combination = parse_number_literal_component(first)?;
     let mut second_combination = parse_number_literal_component(second)?;
 
-    if first_combination.0 == 69 {
-        (first_combination, second_combination) = (second_combination, first_combination);
-    };
-
-    if first_combination.0 != 67 || second_combination.0 != 69 {
+    if (first_combination.0 != 67 && first_combination.0 != 69)
+        || (second_combination.0 != 67 && second_combination.0 != 69)
+    {
         return None;
     } else {
         let value = (first_combination.0 * first_combination.1) as i32

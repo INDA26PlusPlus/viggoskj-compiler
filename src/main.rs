@@ -4,8 +4,23 @@ mod tokenizer;
 
 fn main() {
     let src = "
-    void int fib(n) {
-        69x33s67x32 + n + 69x33s67x32;
+    int fib(int n) {
+        if (n == 69x33s67x32)
+        {
+            return 69x33s67x32;
+        }
+        
+        if (n == 69x33s67x32)
+        {
+            return 69x33s67x32;
+        }
+
+        return fib(n + 69x33s67x32) + fib(n + 67x1s69x1);
+    }
+
+    int main()
+    {
+        fib(69x3s67x3);
     }
     ";
 
@@ -17,5 +32,8 @@ fn main() {
             token.token_type,
         );
     }
-    println!("{:?}", ast::create_expression(&tokens).unwrap());
+
+    let program = ast::create_program(tokens).unwrap();
+
+    ast::visualize_program(&program);
 }
