@@ -242,8 +242,8 @@ fn create_expression_until_stop(
 
             ExpressionNode::StatementNode {
                 node: StatementNode::If { condition, body },
-            } => {
-                println!("Expression created");
+            } => { 
+                println!("Expression created if");
                 return Ok(root);
             }
 
