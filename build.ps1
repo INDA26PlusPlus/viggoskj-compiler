@@ -1,0 +1,1 @@
+."C:\Windows\Microsoft.NET\Framework\v4.0.30319\ilasm.exe" out/out.il /dll /output:out/program.dll

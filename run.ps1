@@ -1,0 +1,1 @@
+dotnet out/program.dll

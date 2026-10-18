@@ -4,4 +4,6 @@ pub enum CompilerError {
     ExpressionError { reasong: String },
     InvalidFunctionDeclaration { reason: String },
     TokenizationError { position: usize },
+    NotAnIdentifier,
+    NotAType,
 }

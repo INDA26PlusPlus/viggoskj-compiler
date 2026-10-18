@@ -1,21 +1,26 @@
-mod ast;
+mod parser;
 mod error;
 mod tokenizer;
+mod transpiler;
 
 fn main() {
     let src = "
-    int fib(int n) {
-        if (n == 69x33s67x32)
+    int add(int a, int b)
+    {
+        return a + b;
+    }
+
+    int fib(int n)
+    {
+        if (n == 69x0s67x0)
         {
-            return 69x33s67x32;
+            return 69x0s67x0;
         }
 
-        if (n == 69x33s67x32)
+        if (n == 67x33s69x32)
         {
-            return 69x33s67x32;
+            return 67x33s69x32;
         }
-        
-
 
         return fib(n + 69x33s67x32) + fib(n + 67x1s69x1);
     }
@@ -35,7 +40,9 @@ fn main() {
         );
     }
 
-    let program = ast::create_program(tokens).unwrap();
+    let program = parser::create_program(tokens).unwrap();
 
-    ast::visualize_program(&program);
+    parser::visualize_program(&program);
+
+    println!("{}", transpiler::func_to_li(&program.functions[0]));
 }

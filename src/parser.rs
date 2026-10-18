@@ -39,20 +39,26 @@ pub enum LiteralNode {
 
 #[derive(Debug, Clone)]
 pub struct FunctionCallNode {
-    identifier: String,
-    arguments: Vec<ExpressionNode>,
+    pub identifier: String,
+    pub arguments: Vec<ExpressionNode>,
 }
 
 #[derive(Debug, Clone)]
 pub struct OperatorNode {
-    operator: Operator,
-    left: Option<Box<ExpressionNode>>,
-    right: Option<Box<ExpressionNode>>,
+    pub operator: Operator,
+    pub left: Option<Box<ExpressionNode>>,
+    pub right: Option<Box<ExpressionNode>>,
 }
 
 #[derive(Debug, Clone)]
 pub struct VariableNode {
-    name: String,
+    pub name: String,
+}
+
+#[derive(Debug)]
+pub enum Type {
+    Void,
+    Int,
 }
 
 #[derive(Debug, Clone)]
@@ -66,13 +72,21 @@ pub enum Operator {
 
 #[derive(Debug)]
 pub struct FunctionDeclarationNode {
-    identifier: String,
-    body: Vec<ExpressionNode>,
+    pub identifier: String,
+    pub return_type: Type,
+    pub args: Vec<ArgumentDeclaration>,
+    pub body: Vec<ExpressionNode>,
+}
+
+#[derive(Debug)]
+pub struct ArgumentDeclaration {
+    pub identifier: String,
+    pub arg_type: Type,
 }
 
 #[derive(Debug)]
 pub struct Program {
-    functions: Vec<FunctionDeclarationNode>,
+    pub functions: Vec<FunctionDeclarationNode>,
 }
 
 pub fn create_program(tokens: Vec<tokenizer::Token>) -> Result<Program, CompilerError> {
@@ -120,6 +134,8 @@ fn create_function_declaration(
             reason: "".to_string(),
         })?;
 
+    let mut args: Vec<ArgumentDeclaration> = Vec::new();
+
     while let arg_type = tokens
         .next()
         .ok_or(CompilerError::InvalidFunctionDeclaration {
@@ -130,16 +146,34 @@ fn create_function_declaration(
                 enclosing_type: tokenizer::EnclosingType::Bracket,
                 open: false,
             })
-    {}
+    {
+        let identifier = tokens
+            .next()
+            .ok_or(CompilerError::InvalidFunctionDeclaration {
+                reason: "function declaraiton end to soon".to_string(),
+            })?;
+        args.push(ArgumentDeclaration {
+            identifier: as_identifier(identifier)?,
+            arg_type: as_type(arg_type)?,
+        });
 
-    let mut expressions = create_block(tokens)?;
+        tokens.next_if(|t| {
+            t.token_type
+                == (tokenizer::TokenType::SyntaxFlow {
+                    syntax_flow_type: tokenizer::SyntaxFlowType::Comma,
+                })
+        });
+    }
+
+    let expressions = create_block(tokens)?;
 
     tokens.next();
 
-    println!("asdasdasd {:?}", return_type_token);
 
     Ok(FunctionDeclarationNode {
         identifier,
+        return_type: as_type(return_type_token)?,
+        args: args,
         body: expressions,
     })
 }
@@ -400,6 +434,12 @@ pub fn visualize_program(program: &Program) {
     for def in &program.functions {
         print_indentaiton(1);
         println!("{}", def.identifier);
+        print_indentaiton(2);
+        println!("return {:?}", def.return_type);
+        for arg in &def.args {
+            print_indentaiton(2);
+            println!("{:?} {:?}", arg.arg_type, arg.identifier)
+        }
         for ex in &def.body {
             visualize_expression_node(ex, 2);
         }
@@ -473,4 +513,22 @@ pub fn visualize_expression_node(node: &ExpressionNode, indentation: usize) {
 fn print_indentaiton(indentation: usize) {
     let v = "| ".repeat(indentation);
     print!("{}", v);
+}
+
+fn as_identifier(token: &tokenizer::Token) -> Result<String, CompilerError> {
+    match &token.token_type {
+        tokenizer::TokenType::Identifier { identifier } => Ok(identifier.clone()),
+        _ => Err(CompilerError::NotAnIdentifier),
+    }
+}
+
+fn as_type(token: &tokenizer::Token) -> Result<Type, CompilerError> {
+    to_type(as_identifier(token)?)
+}
+
+fn to_type(identifier: String) -> Result<Type, CompilerError> {
+    match identifier.as_str() {
+        "int" => Ok(Type::Int),
+        _ => Err(CompilerError::NotAType),
+    }
 }
