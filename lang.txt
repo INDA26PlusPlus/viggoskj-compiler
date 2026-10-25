@@ -28,9 +28,34 @@ int main()
 
 
 
+a = 2 + 4
+b = a - 2
+a = b + 2
+c = a + b
+
+
+
+
+
+R (a + b) +c 
+
+R
+  +
+a   b
+
+
+
 if
     condition: exp node
     body: 
+
+
+
+a + b + c
+
+     + 
+  +     c
+a   b
 
 
 

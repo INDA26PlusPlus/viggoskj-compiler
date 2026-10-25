@@ -5,5 +5,6 @@ pub enum CompilerError {
     InvalidFunctionDeclaration { reason: String },
     TokenizationError { position: usize },
     NotAnIdentifier,
+    InvalidReturnExpression,
     NotAType,
 }

@@ -52,7 +52,7 @@ pub struct OperatorNode {
 
 #[derive(Debug, Clone)]
 pub struct VariableNode {
-    pub name: String,
+    pub identifier: String,
 }
 
 #[derive(Debug)]
@@ -89,7 +89,7 @@ pub struct Program {
     pub functions: Vec<FunctionDeclarationNode>,
 }
 
-pub fn create_program(tokens: Vec<tokenizer::Token>) -> Result<Program, CompilerError> {
+pub fn parse_program(tokens: Vec<tokenizer::Token>) -> Result<Program, CompilerError> {
     let mut prog = Program {
         functions: Vec::new(),
     };
@@ -97,13 +97,13 @@ pub fn create_program(tokens: Vec<tokenizer::Token>) -> Result<Program, Compiler
     let mut iter = tokens.iter().peekable();
 
     while iter.peek().is_some() {
-        prog.functions.push(create_function_declaration(&mut iter)?);
+        prog.functions.push(parse_function_declaration(&mut iter)?);
     }
 
     Ok(prog)
 }
 
-fn create_function_declaration(
+fn parse_function_declaration(
     tokens: &mut Peekable<std::slice::Iter<tokenizer::Token>>,
 ) -> Result<FunctionDeclarationNode, CompilerError> {
     let return_type_token = tokens
@@ -165,10 +165,9 @@ fn create_function_declaration(
         });
     }
 
-    let expressions = create_block(tokens)?;
+    let expressions = parse_code_block(tokens, 0)?;
 
     tokens.next();
-
 
     Ok(FunctionDeclarationNode {
         identifier,
@@ -178,9 +177,10 @@ fn create_function_declaration(
     })
 }
 
-fn create_function_call(
+fn parse_function_call(
     identifier: String,
     tokens: &mut Peekable<std::slice::Iter<tokenizer::Token>>,
+    depth: usize,
 ) -> Result<ExpressionNode, CompilerError> {
     let a = tokens
         .next()
@@ -202,7 +202,7 @@ fn create_function_call(
             })
     {
         println!("--- {:?}", next.token_type);
-        arguments.push(create_expression_until_stop(tokens)?);
+        arguments.push(parse_expression_until_stop(tokens, depth)?);
     }
 
     tokens.next();
@@ -215,12 +215,13 @@ fn create_function_call(
     })
 }
 
-fn create_expression_until_stop(
+fn parse_expression_until_stop(
     tokens: &mut Peekable<std::slice::Iter<tokenizer::Token>>,
+    depth: usize
 ) -> Result<ExpressionNode, CompilerError> {
     let mut stack: Vec<ExpressionNodeStep> = Vec::new();
-    println!("Creating expression: {:?}", tokens.peek());
-    let mut root = tokens_to_expression_node_type(tokens)?;
+    println!("Creating expression ({}): {:?}", depth, tokens.peek());
+    let mut root = tokens_to_expression_node_type(tokens, depth)?;
     println!("next: {:?}", tokens.peek());
 
     while let Some(token) = tokens.peek() {
@@ -236,12 +237,14 @@ fn create_expression_until_stop(
                 syntax_flow_type: tokenizer::SyntaxFlowType::Comma,
             } => {
                 println!("Expression created: {:?}", token);
+                visualize_expression_node(&root, 0);
                 return Ok(root);
             }
             _ => {}
         }
 
         let node = node_at(&mut root, &mut stack.iter());
+        println!("Building on {:?}", node);
         match node {
             ExpressionNode::VariableNode { node: _ }
             | ExpressionNode::LiteralNode { node: _ }
@@ -259,12 +262,27 @@ fn create_expression_until_stop(
                 _ => panic!("{:?} {:?}", node, token),
             },
 
-            ExpressionNode::OperatorNode { node } => {
-                if node.right.is_none() {
-                    node.right = Some(Box::from(tokens_to_expression_node_type(tokens)?));
+            ExpressionNode::OperatorNode { node: n } => {
+                if n.left.is_none() {
+                    n.left = Some(Box::from(tokens_to_expression_node_type(tokens, depth)?));
+                    stack.push(ExpressionNodeStep::OperatorLeft);
+                } else if n.right.is_none() {
+                    n.right = Some(Box::from(tokens_to_expression_node_type(tokens, depth)?));
                     stack.push(ExpressionNodeStep::OperatorRight);
                 } else {
-                    panic!("ASDASDASDA");
+                    match &token.token_type {
+                        tokenizer::TokenType::Operator { operator } => {
+                            tokens.next();
+                            *node = ExpressionNode::OperatorNode {
+                                node: token_operator_to_node(
+                                    operator,
+                                    Some(Box::new((*node).clone())),
+                                    None,
+                                ),
+                            };
+                        }
+                        _ => panic!("{:?} {:?}", node, token),
+                    }
                 }
             }
 
@@ -273,7 +291,9 @@ fn create_expression_until_stop(
             } => {
                 if expression.is_none() {
                     stack.push(ExpressionNodeStep::ReturnExpression);
-                    *expression = Some(Box::new(tokens_to_expression_node_type(tokens)?));
+                    let expr = tokens_to_expression_node_type(tokens, depth)?;
+
+                    *expression = Some(Box::new(expr));
                 } else {
                     panic!("ASDASDASDA");
                 }
@@ -282,14 +302,13 @@ fn create_expression_until_stop(
             ExpressionNode::StatementNode {
                 node: StatementNode::If { condition, body },
             } => {
-                *body = Some(create_block(tokens)?);
-
-                println!("{:?}", tokens.peek());
+                *body = Some(parse_code_block(tokens, depth)?);
                 return Ok(root);
             }
 
             _ => panic!("UNKNOWN NODE!!! {:?}", node),
         };
+        visualize_expression_node(&root, 5);
     }
 
     Err(CompilerError::ExpressionError {
@@ -327,8 +346,9 @@ fn node_at<'a>(
     }
 }
 
-fn create_block(
+fn parse_code_block(
     tokens: &mut Peekable<std::slice::Iter<tokenizer::Token>>,
+    depth: usize,
 ) -> Result<Vec<ExpressionNode>, CompilerError> {
     let mut expressions: Vec<ExpressionNode> = Vec::new();
     println!("----------");
@@ -344,8 +364,8 @@ fn create_block(
                 open: false,
             })
     {
-        println!("block line {:?}", next);
-        expressions.push(create_expression_until_stop(tokens)?);
+        println!("###### Next expression {:?}", next);
+        expressions.push(parse_expression_until_stop(tokens, depth)?);
         tokens.next();
     }
 
@@ -360,6 +380,7 @@ fn token_literal_to_node(literal: &tokenizer::Literal) -> LiteralNode {
 
 fn tokens_to_expression_node_type(
     tokens: &mut Peekable<std::slice::Iter<tokenizer::Token>>,
+    depth: usize
 ) -> Result<ExpressionNode, CompilerError> {
     let token = tokens.next().unwrap();
     println!("to expression node {:?}", token);
@@ -378,11 +399,11 @@ fn tokens_to_expression_node_type(
                         open: true,
                     })
             }) {
-                create_function_call(identifier.clone(), tokens)?
+                parse_function_call(identifier.clone(), tokens, depth)?
             } else {
                 ExpressionNode::VariableNode {
                     node: VariableNode {
-                        name: (*identifier).clone(),
+                        identifier: (*identifier).clone(),
                     },
                 }
             }
@@ -396,14 +417,26 @@ fn tokens_to_expression_node_type(
             flow_controll_type: FlowControllType::If,
         } => {
             tokens.next();
-            let cond = create_expression_until_stop(tokens)?;
+            let cond = parse_expression_until_stop(tokens, depth)?;
             tokens.next();
+
             ExpressionNode::StatementNode {
                 node: StatementNode::If {
                     condition: Box::from(cond),
                     body: None,
                 },
             }
+        }
+        tokenizer::TokenType::Operator { operator } => ExpressionNode::OperatorNode {
+            node: token_operator_to_node(operator, None, None),
+        },
+        tokenizer::TokenType::Enclosing {
+            enclosing_type: EnclosingType::Bracket,
+            open: true,
+        } => {
+            let expr = parse_expression_until_stop(tokens, depth)?;
+            tokens.next();
+            expr
         }
         _ => panic!("NO TIMPLEMENTRADAS!!!{:?}", &token),
     })
@@ -505,7 +538,7 @@ pub fn visualize_expression_node(node: &ExpressionNode, indentation: usize) {
         },
         ExpressionNode::VariableNode { node } => {
             print_indentaiton(indentation);
-            println!("{}", node.name);
+            println!("{}", node.identifier);
         }
     }
 }
