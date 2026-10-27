@@ -28,15 +28,11 @@
     {
         .maxstack 20
 
-        ldc.i4 3
         ldarg.0
-        add
         ldarg.1
-        add
         ldarg.2
-        ldarg.3
         add
-        ldc.i4 3
+        ldarg.3
         add
         add
         ret
@@ -46,17 +42,17 @@
     {
         .maxstack 20
 
-        ldc.i4 3
-        ldc.i4 3
-        ldc.i4 3
+        ldc.i4 1
+        ldc.i4 1
+        ldc.i4 1
         add
-        ldc.i4 3
-        ldc.i4 3
+        ldc.i4 1
+        ldc.i4 1
         call int32 CompiledClass::func(int32, int32, int32, int32)
-        ldc.i4 -667
-        ldc.i4 3
-        ldc.i4 3
-        ldc.i4 3
+        ldc.i4 1
+        ldc.i4 1
+        ldc.i4 1
+        ldc.i4 1
         call int32 CompiledClass::func(int32, int32, int32, int32)
         add
         ret

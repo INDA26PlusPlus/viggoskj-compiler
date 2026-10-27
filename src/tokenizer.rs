@@ -369,8 +369,8 @@ fn literal_token_evaluator(token_string: &str) -> Option<TokenType> {
 }
 
 fn number_literal_continue_decition(ctx: &TokenizationContext) -> TokenizationDecition {
-    if "1234567890xs".contains(ctx.current) {
-        if "1234567890xs".contains(ctx.next) {
+    if "1234567890".contains(ctx.current) {
+        if "1234567890".contains(ctx.next) {
             return TokenizationDecition::Continue;
         } else {
             return TokenizationDecition::Complete;
@@ -380,35 +380,11 @@ fn number_literal_continue_decition(ctx: &TokenizationContext) -> TokenizationDe
 }
 
 fn number_literal_token_evaluator(token_string: &str) -> Option<TokenType> {
-    let (first, second) = token_string.split_once("s")?;
+    let first_num: i32 = token_string.parse::<i32>().ok()?;
 
-    let mut first_combination = parse_number_literal_component(first)?;
-    let mut second_combination = parse_number_literal_component(second)?;
-
-    if (first_combination.0 != 67 && first_combination.0 != 69)
-        || (second_combination.0 != 67 && second_combination.0 != 69)
-    {
-        return None;
-    } else {
-        let value = (first_combination.0 * first_combination.1) as i32
-            - (second_combination.0 * second_combination.1) as i32;
-        return Some(TokenType::Literal {
-            literal: Literal::IntLiteral { value },
-        });
-    }
-}
-
-fn parse_number_literal_component(component: &str) -> Option<(u32, u32)> {
-    let (first, second) = match component.split_once("x") {
-        Some(v) => v,
-        None => return None,
-    };
-
-    let first_num = first.parse::<u32>().ok()?;
-
-    let second_num = second.parse::<u32>().ok()?;
-
-    Some((first_num, second_num))
+    Some(TokenType::Literal {
+        literal: Literal::IntLiteral { value: first_num },
+    })
 }
 
 fn generate_rule(
