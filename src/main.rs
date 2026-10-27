@@ -2,12 +2,18 @@ mod parser;
 mod error;
 mod tokenizer;
 mod transpiler;
+use std::fs;
 
 fn main() {
     let src = "
     int func(int a, int b, int c, int d)
     {
         return 67x33s69x32 + a + b + (c + d + 67x33s69x32); 
+    }
+
+    int main()
+    {
+        return func(67x33s69x32, 67x33s69x32 + 67x33s69x32, 67x33s69x32, 67x33s69x32) + func(67x23s69x32, 67x33s69x32, 67x33s69x32, 67x33s69x32);
     }
     ";
 
@@ -25,6 +31,9 @@ fn main() {
 
     parser::visualize_program(&program);
 
+    let il = transpiler::prog_to_li(program).unwrap();
 
-    println!("\n\n\n{}", transpiler::func_to_li(&program.functions[0]).unwrap());
+    println!("\n\n\n{}", il);
+
+    fs::write("out/out.il", il).unwrap();
 }

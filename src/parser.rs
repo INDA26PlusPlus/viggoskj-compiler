@@ -55,7 +55,7 @@ pub struct VariableNode {
     pub identifier: String,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Type {
     Void,
     Int,
@@ -78,7 +78,7 @@ pub struct FunctionDeclarationNode {
     pub body: Vec<ExpressionNode>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ArgumentDeclaration {
     pub identifier: String,
     pub arg_type: Type,
@@ -182,7 +182,7 @@ fn parse_function_call(
     tokens: &mut Peekable<std::slice::Iter<tokenizer::Token>>,
     depth: usize,
 ) -> Result<ExpressionNode, CompilerError> {
-    let a = tokens
+    let bracket = tokens
         .next()
         .ok_or(CompilerError::InvalidFunctionDeclaration {
             reason: "".to_string(),
@@ -203,6 +203,8 @@ fn parse_function_call(
     {
         println!("--- {:?}", next.token_type);
         arguments.push(parse_expression_until_stop(tokens, depth)?);
+
+        tokens.next_if(|f| f.token_type == (tokenizer::TokenType::SyntaxFlow { syntax_flow_type: tokenizer::SyntaxFlowType::Comma }));
     }
 
     tokens.next();
@@ -265,10 +267,8 @@ fn parse_expression_until_stop(
             ExpressionNode::OperatorNode { node: n } => {
                 if n.left.is_none() {
                     n.left = Some(Box::from(tokens_to_expression_node_type(tokens, depth)?));
-                    stack.push(ExpressionNodeStep::OperatorLeft);
                 } else if n.right.is_none() {
                     n.right = Some(Box::from(tokens_to_expression_node_type(tokens, depth)?));
-                    stack.push(ExpressionNodeStep::OperatorRight);
                 } else {
                     match &token.token_type {
                         tokenizer::TokenType::Operator { operator } => {

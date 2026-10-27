@@ -7,4 +7,5 @@ pub enum CompilerError {
     NotAnIdentifier,
     InvalidReturnExpression,
     NotAType,
+    FunctionNotDefined,
 }

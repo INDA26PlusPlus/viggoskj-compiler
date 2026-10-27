@@ -3,7 +3,7 @@ use std::collections::HashMap;
 
 use crate::{
     error::CompilerError,
-    parser::{self, ExpressionNode},
+    parser::{self, ExpressionNode, FunctionDeclarationNode, Program},
     transpiler::Instruction::BinaryOp,
 };
 
@@ -31,18 +31,66 @@ pub enum Instruction {
     Return {
         id: ValueId,
     },
+    FunctionCall {
+        identifier: String,
+        return_type: parser::Type,
+        args: Vec<parser::Type>,
+    },
 }
 
 #[derive(Debug)]
-struct LiState {
+struct LiState<'a> {
     next_id: usize,
     arg_count: usize,
     variables: HashMap<String, usize>,
+    functions: &'a Vec<FunctionDeclarationNode>,
 }
 
-pub fn func_to_li(func: &parser::FunctionDeclarationNode) -> Result<String, CompilerError> {
+pub fn prog_to_li(program: Program) -> Result<String, CompilerError> {
+    let mut li = "
+.assembly extern System.Runtime {}
+.assembly extern System.Console {}
+
+.assembly MyProgram {}
+
+.class public auto ansi CompiledClass
+    extends [System.Runtime]System.Object
+{
+
+
+    .method public static int32 Main() cil managed
+    {
+        .entrypoint
+        .maxstack 1
+
+        call int32 CompiledClass::main()
+
+        call void [System.Console]System.Console::WriteLine(int32)
+
+        ldc.i4.0
+        ret
+    }
+
+
+    "
+    .to_string();
+
+    for func in &program.functions {
+        li += "\n";
+        li += func_to_li(func, &program.functions)?.as_str();
+    }
+
+    li += "\n}";
+
+    return Ok(li);
+}
+
+pub fn func_to_li(
+    func: &parser::FunctionDeclarationNode,
+    funcs: &Vec<FunctionDeclarationNode>,
+) -> Result<String, CompilerError> {
     // define function
-    let mut out = ".method public static ".to_string();
+    let mut out = indentation(1) + ".method public static ";
 
     // add return type
     out += type_to_string(&func.return_type).as_str();
@@ -67,6 +115,7 @@ pub fn func_to_li(func: &parser::FunctionDeclarationNode) -> Result<String, Comp
     let mut state = LiState {
         next_id: 0,
         arg_count: func.args.len(),
+        functions: funcs,
         variables: HashMap::new(),
     };
 
@@ -83,17 +132,22 @@ pub fn func_to_li(func: &parser::FunctionDeclarationNode) -> Result<String, Comp
     // all isntructions
     expression_to_il(func, &func.body[0], &mut state, &mut instructions)?;
 
+    out += "\n";
+    out += indentation(1).as_str();
     out += "{\n";
 
     // temp max stack
+    out += indentation(2).as_str();
     out += ".maxstack 20\n\n";
 
     for i in instructions {
         println!("{:?}", i);
+        out += indentation(2).as_str();
         out += instruction_to_text(&i).as_str();
         out += "\n";
     }
 
+    out += indentation(1).as_str();
     out += "}\n";
 
     Ok(out)
@@ -107,7 +161,22 @@ fn expression_to_il(
 ) -> Result<(), CompilerError> {
     match current_node {
         parser::ExpressionNode::FunctionCall { node } => {
-            panic!("NOT IMPL");
+            let f = state
+                .functions
+                .iter()
+                .find(|f| f.identifier == node.identifier)
+                .ok_or(CompilerError::FunctionNotDefined)?;
+
+            for arg in &node.arguments
+            {
+                expression_to_il(func, arg, state, instructions)?;
+            }
+
+            instructions.push(Instruction::FunctionCall {
+                identifier: node.identifier.clone(),
+                return_type: f.return_type.clone(),
+                args: Vec::from_iter(f.args.iter().map(|a| a.arg_type.clone())),
+            });
         }
         parser::ExpressionNode::LiteralNode { node } => match node {
             parser::LiteralNode::IntLiteral { number } => {
@@ -129,8 +198,6 @@ fn expression_to_il(
                 instructions,
             )?;
 
-
-
             instructions.push(Instruction::BinaryOp {
                 dest: state.next_id,
                 operator: node.operator.clone(),
@@ -147,7 +214,8 @@ fn expression_to_il(
                     instructions,
                 )?;
                 instructions.push(Instruction::Return {
-                    id: get_id(instructions.last().unwrap()).ok_or(CompilerError::InvalidReturnExpression)?,
+                    id: get_id(instructions.last().unwrap())
+                        .ok_or(CompilerError::InvalidReturnExpression)?,
                 });
             }
             parser::StatementNode::If { condition, body } => {
@@ -195,7 +263,17 @@ fn instruction_to_text(inst: &Instruction) -> String {
         BinaryOp { dest, operator } => operator_text(operator),
         Instruction::LoadArgument { id } => format!("ldarg.{}", id),
         Instruction::Return { id } => "ret".to_string(),
-        Instruction::PushToStack { value } => format!("ldc.i4.{}", value),
+        Instruction::PushToStack { value } => format!("ldc.i4 {}", value),
+        Instruction::FunctionCall {
+            identifier,
+            args,
+            return_type,
+        } => format!(
+            "call {} CompiledClass::{}({})",
+            type_to_string(return_type),
+            identifier,
+            Vec::from_iter(args.iter().map(|a| type_to_string(a))).join(", ")
+        ),
         _ => panic!("Asdasdasd"),
     }
 }
@@ -205,4 +283,8 @@ fn operator_text(op: &parser::Operator) -> String {
         parser::Operator::Plus => "add".to_string(),
         _ => panic!("AASD"),
     }
+}
+
+fn indentation(indentation: usize) -> String {
+    "    ".repeat(indentation).to_string()
 }
