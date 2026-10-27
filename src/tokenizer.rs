@@ -86,6 +86,15 @@ create_constant_choise!(
     }
 );
 
+// -
+create_char_decition!(minus_decition_evaluator, '-');
+create_constant_choise!(
+    minus_token_type_evaluator,
+    TokenType::Operator {
+        operator: Operator::Minus
+    }
+);
+
 // if
 create_word_decition!(if_decition_evaluator, "if");
 create_word_choise!(
@@ -152,7 +161,7 @@ create_word_choise!(
     }
 );
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Token {
     pub token_type: TokenType,
     pub span: (usize, usize),
@@ -260,6 +269,7 @@ fn reset_rules(start: usize) -> Vec<(LexerRule, TokenState)> {
             number_literal_token_evaluator,
             start,
         ),
+        generate_rule(minus_decition_evaluator, minus_token_type_evaluator, start),
         generate_rule(identifier_continue_decition, literal_token_evaluator, start),
     ]
 }

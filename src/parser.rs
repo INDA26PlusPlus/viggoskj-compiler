@@ -63,7 +63,7 @@ pub enum Type {
 
 #[derive(Debug, Clone)]
 pub enum Operator {
-    Equals,
+    EqualsEqual,
     Plus,
     Minus,
     Multiply,
@@ -204,7 +204,12 @@ fn parse_function_call(
         println!("--- {:?}", next.token_type);
         arguments.push(parse_expression_until_stop(tokens, depth)?);
 
-        tokens.next_if(|f| f.token_type == (tokenizer::TokenType::SyntaxFlow { syntax_flow_type: tokenizer::SyntaxFlowType::Comma }));
+        tokens.next_if(|f| {
+            f.token_type
+                == (tokenizer::TokenType::SyntaxFlow {
+                    syntax_flow_type: tokenizer::SyntaxFlowType::Comma,
+                })
+        });
     }
 
     tokens.next();
@@ -219,7 +224,7 @@ fn parse_function_call(
 
 fn parse_expression_until_stop(
     tokens: &mut Peekable<std::slice::Iter<tokenizer::Token>>,
-    depth: usize
+    depth: usize,
 ) -> Result<ExpressionNode, CompilerError> {
     let mut stack: Vec<ExpressionNodeStep> = Vec::new();
     println!("Creating expression ({}): {:?}", depth, tokens.peek());
@@ -380,7 +385,7 @@ fn token_literal_to_node(literal: &tokenizer::Literal) -> LiteralNode {
 
 fn tokens_to_expression_node_type(
     tokens: &mut Peekable<std::slice::Iter<tokenizer::Token>>,
-    depth: usize
+    depth: usize,
 ) -> Result<ExpressionNode, CompilerError> {
     let token = tokens.next().unwrap();
     println!("to expression node {:?}", token);
@@ -453,8 +458,13 @@ fn token_operator_to_node(
             left,
             right,
         },
+        tokenizer::Operator::Minus => OperatorNode {
+            operator: Operator::Minus,
+            left,
+            right,
+        },
         tokenizer::Operator::EqualEqual => OperatorNode {
-            operator: Operator::Equals,
+            operator: Operator::EqualsEqual,
             left,
             right,
         },
@@ -506,7 +516,7 @@ pub fn visualize_expression_node(node: &ExpressionNode, indentation: usize) {
                     Operator::Minus => "-",
                     Operator::Multiply => "*",
                     Operator::Plus => "+",
-                    Operator::Equals => "==",
+                    Operator::EqualsEqual => "==",
                 }
             );
             if let Some(left) = &node.left {
@@ -551,7 +561,9 @@ fn print_indentaiton(indentation: usize) {
 fn as_identifier(token: &tokenizer::Token) -> Result<String, CompilerError> {
     match &token.token_type {
         tokenizer::TokenType::Identifier { identifier } => Ok(identifier.clone()),
-        _ => Err(CompilerError::NotAnIdentifier),
+        _ => Err(CompilerError::NotAnIdentifier {
+            token: (*token).clone(),
+        }),
     }
 }
 

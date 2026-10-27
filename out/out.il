@@ -24,16 +24,32 @@
 
 
     
-    .method public static int32 func(int32 a, int32 b, int32 c, int32 d)
+    .method public static int32 fib(int32 n)
     {
         .maxstack 20
 
         ldarg.0
-        ldarg.1
-        ldarg.2
-        add
-        ldarg.3
-        add
+        ldc.i4 0
+        ceq
+        brfalse JUMP_0
+        ldc.i4 0
+        ret
+        JUMP_0:
+        ldarg.0
+        ldc.i4 1
+        ceq
+        brfalse JUMP_1
+        ldc.i4 1
+        ret
+        JUMP_1:
+        ldarg.0
+        ldc.i4 1
+        sub
+        call int32 CompiledClass::fib(int32)
+        ldarg.0
+        ldc.i4 2
+        sub
+        call int32 CompiledClass::fib(int32)
         add
         ret
     }
@@ -42,19 +58,8 @@
     {
         .maxstack 20
 
-        ldc.i4 1
-        ldc.i4 1
-        ldc.i4 1
-        add
-        ldc.i4 3
-        add
-        ldc.i4 1
-        ldc.i4 1
-        ldc.i4 1
-        ldc.i4 1
-        ldc.i4 1
-        call int32 CompiledClass::func(int32, int32, int32, int32)
-        call int32 CompiledClass::func(int32, int32, int32, int32)
+        ldc.i4 12
+        call int32 CompiledClass::fib(int32)
         ret
     }
 

@@ -4,7 +4,6 @@ use std::collections::HashMap;
 use crate::{
     error::CompilerError,
     parser::{self, ExpressionNode, FunctionDeclarationNode, Program},
-    transpiler::Instruction::BinaryOp,
 };
 
 type ValueId = usize;
@@ -27,6 +26,12 @@ pub enum Instruction {
     LoadVariable {
         id: ValueId,
     },
+    JumpMark {
+        jump_index: usize,
+    },
+    JumpIfFalse {
+        to_jump_index: usize,
+    },
     Return,
     FunctionCall {
         identifier: String,
@@ -39,6 +44,7 @@ pub enum Instruction {
 struct LiState<'a> {
     next_id: usize,
     arg_count: usize,
+    next_jump_index: usize,
     variables: HashMap<String, usize>,
     functions: &'a Vec<FunctionDeclarationNode>,
 }
@@ -113,6 +119,7 @@ pub fn func_to_li(
         next_id: 0,
         arg_count: func.args.len(),
         functions: funcs,
+        next_jump_index: 0,
         variables: HashMap::new(),
     };
 
@@ -127,7 +134,9 @@ pub fn func_to_li(
     }
 
     // all isntructions
-    expression_to_il(func, &func.body[0], &mut state, &mut instructions)?;
+    for expr in &func.body {
+        expression_to_il(func, expr, &mut state, &mut instructions)?;
+    }
 
     out += "\n";
     out += indentation(1).as_str();
@@ -214,7 +223,23 @@ fn expression_to_il(
                 instructions.push(Instruction::Return);
             }
             parser::StatementNode::If { condition, body } => {
-                panic!("NOT IMPL");
+                expression_to_il(func, condition.to_owned().as_mut(), state, instructions)?;
+
+                let j_index = state.next_jump_index;
+                state.next_jump_index += 1;
+                instructions.push(Instruction::JumpIfFalse {
+                    to_jump_index: j_index,
+                });
+
+                let b = body.clone().ok_or(CompilerError::NoBody)?;
+
+                for ins in b {
+                    expression_to_il(func, &ins, state, instructions);
+                }
+
+                instructions.push(Instruction::JumpMark {
+                    jump_index: j_index,
+                });
             }
             _ => panic!("ASDASD"),
         },
@@ -249,14 +274,18 @@ fn get_id(inst: &Instruction) -> Option<usize> {
         Instruction::PushToStack { value } => None,
         Instruction::BinaryOp { operator } => None,
         Instruction::SetIntegerLiteral { dest, value } => Some(*dest),
-        Instruction::FunctionCall { identifier, return_type, args } => None,
+        Instruction::FunctionCall {
+            identifier,
+            return_type,
+            args,
+        } => None,
         _ => panic!("not impl {:?}", inst),
     }
 }
 
 fn instruction_to_text(inst: &Instruction) -> String {
     match inst {
-        BinaryOp { operator } => operator_text(operator),
+        Instruction::BinaryOp { operator } => operator_text(operator),
         Instruction::LoadArgument { id } => format!("ldarg.{}", id),
         Instruction::Return => "ret".to_string(),
         Instruction::PushToStack { value } => format!("ldc.i4 {}", value),
@@ -270,6 +299,8 @@ fn instruction_to_text(inst: &Instruction) -> String {
             identifier,
             Vec::from_iter(args.iter().map(|a| type_to_string(a))).join(", ")
         ),
+        Instruction::JumpMark { jump_index } => format!("JUMP_{}:", jump_index),
+        Instruction::JumpIfFalse { to_jump_index } => format!("brfalse JUMP_{}", to_jump_index),
         _ => panic!("Asdasdasd {:?}", inst),
     }
 }
@@ -277,6 +308,8 @@ fn instruction_to_text(inst: &Instruction) -> String {
 fn operator_text(op: &parser::Operator) -> String {
     match op {
         parser::Operator::Plus => "add".to_string(),
+        parser::Operator::Minus => "sub".to_string(),
+        parser::Operator::EqualsEqual => "ceq".to_string(),
         _ => panic!("AASD"),
     }
 }

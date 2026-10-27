@@ -1,25 +1,35 @@
-mod parser;
 mod error;
+mod parser;
 mod tokenizer;
 mod transpiler;
 use std::fs;
 
 fn main() {
     let src = "
-    int func(int a, int b, int c, int d)
+    int fib(int n)
     {
-        return  a + (b + c + d ); 
+        if (n == 0)
+        {
+            return 0;
+        }
+
+        if (n == 1)
+        {
+            return 1;
+        }
+
+        return fib(n - 1) + fib(n - 2);
     }
 
     int main()
     {
-        return func(1, 1 + 1 + 3, 1, func(1, 1, 1, 1)); 
+        return fib(12);
     }
+
     ";
 
     let tokens = tokenizer::tokenize(src).unwrap();
     for token in &tokens {
-        break;
         println!(
             "{:?} - {:?}",
             tokenizer::token_string(token, src),
