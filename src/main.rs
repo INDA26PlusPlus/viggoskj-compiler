@@ -13,7 +13,7 @@ fn main() {
 
     int main()
     {
-        return func(1, 1 + 1, 1, func(1, 1, 1, 1)); 
+        return func(1, 1 + 1 + 3, 1, func(1, 1, 1, 1)); 
     }
     ";
 

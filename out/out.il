@@ -46,15 +46,15 @@
         ldc.i4 1
         ldc.i4 1
         add
-        ldc.i4 1
-        ldc.i4 1
-        call int32 CompiledClass::func(int32, int32, int32, int32)
-        ldc.i4 1
-        ldc.i4 1
-        ldc.i4 1
-        ldc.i4 1
-        call int32 CompiledClass::func(int32, int32, int32, int32)
+        ldc.i4 3
         add
+        ldc.i4 1
+        ldc.i4 1
+        ldc.i4 1
+        ldc.i4 1
+        ldc.i4 1
+        call int32 CompiledClass::func(int32, int32, int32, int32)
+        call int32 CompiledClass::func(int32, int32, int32, int32)
         ret
     }
 

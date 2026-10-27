@@ -12,7 +12,6 @@ type ValueId = usize;
 #[derive(Debug)]
 pub enum Instruction {
     BinaryOp {
-        dest: ValueId,
         operator: parser::Operator,
     },
     SetIntegerLiteral {
@@ -28,9 +27,7 @@ pub enum Instruction {
     LoadVariable {
         id: ValueId,
     },
-    Return {
-        id: ValueId,
-    },
+    Return,
     FunctionCall {
         identifier: String,
         return_type: parser::Type,
@@ -167,8 +164,7 @@ fn expression_to_il(
                 .find(|f| f.identifier == node.identifier)
                 .ok_or(CompilerError::FunctionNotDefined)?;
 
-            for arg in &node.arguments
-            {
+            for arg in &node.arguments {
                 expression_to_il(func, arg, state, instructions)?;
             }
 
@@ -199,11 +195,8 @@ fn expression_to_il(
             )?;
 
             instructions.push(Instruction::BinaryOp {
-                dest: state.next_id,
                 operator: node.operator.clone(),
             });
-
-            state.next_id += 1;
         }
         parser::ExpressionNode::StatementNode { node } => match node {
             parser::StatementNode::Return { expression } => {
@@ -213,10 +206,12 @@ fn expression_to_il(
                     state,
                     instructions,
                 )?;
-                instructions.push(Instruction::Return {
-                    id: get_id(instructions.last().unwrap())
-                        .ok_or(CompilerError::InvalidReturnExpression)?,
-                });
+
+                if let Some(variable) = get_id(instructions.last().unwrap()) {
+                    instructions.push(Instruction::LoadVariable { id: variable });
+                }
+
+                instructions.push(Instruction::Return);
             }
             parser::StatementNode::If { condition, body } => {
                 panic!("NOT IMPL");
@@ -252,17 +247,18 @@ fn get_id(inst: &Instruction) -> Option<usize> {
         Instruction::LoadVariable { id } => Some(*id),
         Instruction::LoadArgument { id } => Some(*id),
         Instruction::PushToStack { value } => None,
-        Instruction::BinaryOp { dest, operator } => Some(*dest),
+        Instruction::BinaryOp { operator } => None,
         Instruction::SetIntegerLiteral { dest, value } => Some(*dest),
+        Instruction::FunctionCall { identifier, return_type, args } => None,
         _ => panic!("not impl {:?}", inst),
     }
 }
 
 fn instruction_to_text(inst: &Instruction) -> String {
     match inst {
-        BinaryOp { dest, operator } => operator_text(operator),
+        BinaryOp { operator } => operator_text(operator),
         Instruction::LoadArgument { id } => format!("ldarg.{}", id),
-        Instruction::Return { id } => "ret".to_string(),
+        Instruction::Return => "ret".to_string(),
         Instruction::PushToStack { value } => format!("ldc.i4 {}", value),
         Instruction::FunctionCall {
             identifier,
@@ -274,7 +270,7 @@ fn instruction_to_text(inst: &Instruction) -> String {
             identifier,
             Vec::from_iter(args.iter().map(|a| type_to_string(a))).join(", ")
         ),
-        _ => panic!("Asdasdasd"),
+        _ => panic!("Asdasdasd {:?}", inst),
     }
 }
 
